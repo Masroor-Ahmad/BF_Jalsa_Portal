@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="My Event">
+<meta name="theme-color" content="#1a3a5c">
+<title>Guest Info</title>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#1a3a5c;--primary-light:#2557a7;--accent:#0ea5e9;
+  --success:#16a34a;--danger:#dc2626;--warn:#d97706;
+  --bg:#f0f4f8;--text:#1e293b;--muted:#64748b;--border:#cbd5e1;--radius:12px;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:24px}
+
+/* HEADER */
+.app-header{background:var(--primary);color:#fff;padding:16px 20px 0;text-align:center}
+.app-header .label{font-size:.72rem;opacity:.7;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px}
+.app-header .event-name{font-size:1.25rem;font-weight:800;margin-bottom:0}
+
+/* MAIN */
+.main{padding:16px;max-width:480px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+
+/* REPORT OVERLAY */
+.report-overlay{display:none;position:fixed;inset:0;background:#fff;z-index:200;overflow-y:auto}
+.report-overlay.open{display:block}
+.report-overlay-hdr{background:var(--primary);color:#fff;padding:14px 20px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10}
+.report-overlay-hdr .back-btn{background:none;border:none;color:rgba(255,255,255,.85);font-size:.9rem;font-weight:700;cursor:pointer;padding:4px 8px 4px 0;display:flex;align-items:center;gap:5px}
+.report-overlay-hdr .back-btn:hover{color:#fff}
+.report-overlay-title{font-size:1rem;font-weight:800}
+
+/* ID CARD */
+.id-card{background:var(--primary);color:#fff;border-radius:var(--radius);padding:22px 20px;text-align:center;box-shadow:0 4px 16px rgba(26,58,92,.35)}
+.id-card .label{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;opacity:.7;margin-bottom:4px}
+.id-card .name{font-size:1.3rem;font-weight:800;margin-bottom:14px}
+.id-card .id-num{font-size:2.6rem;font-weight:900;letter-spacing:3px;font-family:ui-monospace,monospace;line-height:1;background:rgba(255,255,255,.12);border-radius:8px;padding:10px 16px;display:inline-block;margin-bottom:12px}
+.id-card .loc{font-size:.85rem;opacity:.75}
+
+/* BED CARD */
+.bed-card{background:#fff;border-radius:var(--radius);padding:18px 20px;box-shadow:0 1px 4px rgba(0,0,0,.08);display:flex;align-items:center;gap:16px}
+.bed-icon{font-size:2rem;flex-shrink:0}
+.bed-info{}
+.bed-info .bed-label{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
+.bed-info .bed-hall{font-size:1.1rem;font-weight:700;color:var(--primary);margin-top:2px}
+.bed-info .bed-num{font-size:.9rem;color:var(--muted);margin-top:2px}
+.bed-card.unassigned{border:2px dashed var(--border);background:#f8fafc}
+.bed-card.unassigned .bed-info .bed-hall{color:var(--muted);font-weight:600}
+
+/* TILE BUTTONS */
+.tile-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.tile{background:#fff;border-radius:var(--radius);padding:20px 12px 16px;box-shadow:0 1px 4px rgba(0,0,0,.08);border-top:4px solid var(--tile-color,#1a3a5c);cursor:pointer;text-align:center;border-left:none;border-right:none;border-bottom:none;width:100%;transition:transform .12s,box-shadow .12s;-webkit-tap-highlight-color:transparent}
+.tile:active{transform:scale(.97);box-shadow:0 0 2px rgba(0,0,0,.1)}
+.tile.full{grid-column:1/-1}
+.tile-emoji{font-size:2rem;line-height:1;display:block;margin-bottom:8px}
+.tile-title{font-size:.88rem;font-weight:700;color:var(--primary);display:block}
+
+/* TILE DETAIL SHEET */
+.tile-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:300;align-items:flex-end;justify-content:center}
+.tile-overlay.open{display:flex}
+.tile-sheet{background:#fff;border-radius:20px 20px 0 0;padding:0 0 40px;width:100%;max-width:480px;max-height:80vh;overflow-y:auto;animation:sheet-up .22s ease-out}
+@keyframes sheet-up{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.tile-sheet-hdr{position:sticky;top:0;background:#fff;border-bottom:1px solid var(--border);padding:16px 20px;display:flex;align-items:center;gap:12px;border-radius:20px 20px 0 0}
+.tile-sheet-emoji{font-size:1.8rem;flex-shrink:0}
+.tile-sheet-title{font-size:1.05rem;font-weight:800;color:var(--primary);flex:1}
+.tile-sheet-close{background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--muted);padding:4px;flex-shrink:0}
+.tile-sheet-body{padding:18px 20px;font-size:.95rem;color:var(--text);line-height:1.65}
+.tile-sheet-body p{margin-bottom:8px}
+.tile-sheet-body p:last-child{margin-bottom:0}
+.tile-sheet-body ul{padding-left:18px}
+.tile-sheet-body li{margin-bottom:5px}
+.tile-sheet-body a{color:var(--accent);text-decoration:none;font-weight:600}
+.tile-contact-row{display:flex;gap:10px;align-items:flex-start;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+.tile-contact-row:last-child{margin-bottom:0;padding-bottom:0;border-bottom:none}
+.tile-contact-label{font-size:.78rem;font-weight:700;color:var(--muted);min-width:90px;flex-shrink:0;padding-top:2px;text-transform:uppercase;letter-spacing:.3px}
+.tile-contact-val{font-size:.95rem;font-weight:600}
+
+/* ADD TO HOME SCREEN NUDGE */
+.nudge{background:#ecfdf5;border:1.5px solid #6ee7b7;border-radius:var(--radius);padding:12px 14px;display:flex;align-items:flex-start;gap:10px;position:relative}
+.nudge .nudge-icon{font-size:1.4rem;flex-shrink:0}
+.nudge .nudge-text{font-size:.82rem;color:#065f46;line-height:1.45}
+.nudge .nudge-text strong{display:block;margin-bottom:2px}
+.nudge-close{position:absolute;top:8px;right:10px;background:none;border:none;font-size:1rem;cursor:pointer;color:var(--muted);padding:0}
+
+/* REPORT FORM CARDS */
+.rpt-card{background:#fff;border-radius:var(--radius);padding:18px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:14px}
+.rpt-card-title{font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:12px}
+.rpt-card.privacy-highlight{border:2px solid var(--warn);background:#fffbeb}
+
+/* SELECTS & INPUTS */
+.rpt-select{width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:.95rem;color:var(--text);background:#fff;transition:border-color .2s;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%2364748b' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center}
+.rpt-select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(14,165,233,.15)}
+.rpt-select:disabled{opacity:.5;cursor:not-allowed;background-color:#f8fafc}
+.rpt-select+.rpt-select{margin-top:10px}
+.rpt-textarea{width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:.95rem;color:var(--text);background:#fff;resize:vertical;min-height:100px;font-family:inherit;transition:border-color .2s;line-height:1.5}
+.rpt-textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(14,165,233,.15)}
+
+/* CATEGORY BUTTONS */
+.cat-grid{display:flex;flex-wrap:wrap;gap:8px}
+.cat-btn{padding:8px 14px;border-radius:99px;border:1.5px solid var(--border);background:#fff;font-size:.88rem;font-weight:600;cursor:pointer;color:var(--text);transition:all .15s;white-space:nowrap}
+.cat-btn:active{transform:scale(.97)}
+.cat-btn.selected{background:var(--primary);color:#fff;border-color:var(--primary)}
+
+/* Selected category + change link */
+.cat-chosen{display:none;align-items:center;gap:10px;flex-wrap:wrap}
+.cat-chosen.visible{display:flex}
+.cat-chosen-label{background:var(--primary);color:#fff;border-radius:99px;padding:8px 14px;font-size:.88rem;font-weight:700}
+.cat-change-btn{background:none;border:none;color:var(--primary-light);font-size:.82rem;font-weight:700;cursor:pointer;padding:4px 0;text-decoration:underline}
+
+/* SUB-CATEGORY BUTTONS — visually distinct */
+.subcat-wrap{margin-top:14px;display:none;border-top:1.5px solid var(--border);padding-top:12px}
+.subcat-wrap.visible{display:block}
+.subcat-label{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px}
+.subcat-grid{display:flex;flex-wrap:wrap;gap:8px}
+.subcat-btn{padding:7px 13px;border-radius:8px;border:1.5px solid var(--accent);background:#f0f9ff;font-size:.85rem;font-weight:600;cursor:pointer;color:var(--primary-light);transition:all .15s;white-space:nowrap}
+.subcat-btn:active{transform:scale(.97)}
+.subcat-btn.selected{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+/* ANONYMOUS CHECKBOX */
+.anon-label{display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:.88rem;color:var(--text);line-height:1.45}
+.anon-label input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent);flex-shrink:0;margin-top:2px}
+
+/* SUBMIT BTN */
+.rpt-submit-btn{width:100%;padding:14px;background:var(--primary-light);color:#fff;border:none;border-radius:8px;font-size:1rem;font-weight:700;cursor:pointer;transition:background .15s}
+.rpt-submit-btn:hover{background:var(--primary)}
+.rpt-submit-btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* SUCCESS CARD */
+.success-card{background:#f0fdf4;border:2px solid #86efac;border-radius:var(--radius);padding:28px 20px;text-align:center}
+.success-card .s-icon{font-size:2.5rem;margin-bottom:10px}
+.success-card h3{font-size:1.1rem;font-weight:800;color:var(--success);margin-bottom:8px}
+.success-card p{font-size:.9rem;color:#065f46;line-height:1.5;margin-bottom:6px}
+.success-card .ref{font-size:.8rem;color:var(--muted);font-family:monospace;margin-top:8px}
+.success-card .another-btn{margin-top:16px;padding:11px 20px;background:var(--primary-light);color:#fff;border:none;border-radius:8px;font-size:.9rem;font-weight:700;cursor:pointer}
+
+/* NO FIREBASE NOTICE */
+.no-fb-notice{background:#fff7ed;border:1.5px solid #fed7aa;border-radius:var(--radius);padding:16px;font-size:.88rem;color:#92400e;line-height:1.5}
+.no-fb-notice strong{display:block;margin-bottom:4px}
+
+
+/* ERROR */
+.error-box{background:#fff;border-radius:var(--radius);padding:32px 20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.error-box .err-icon{font-size:2.5rem;margin-bottom:12px}
+.error-box h2{font-size:1.1rem;font-weight:700;color:var(--primary);margin-bottom:8px}
+.error-box p{font-size:.9rem;color:var(--muted);line-height:1.5}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="app-header" style="padding-bottom:16px">
+  <div class="label">Event Registration</div>
+  <div class="event-name" id="hdr-event">Loading…</div>
+</div>
+
+<!-- HOME PAGE -->
+<div id="main-content" class="main" style="display:none">
+    <!-- ID CARD -->
+    <div class="id-card">
+      <div class="label">Your Registration ID</div>
+      <div class="id-num" id="g-id">—</div>
+      <div class="name" id="g-name">—</div>
+      <div class="loc" id="g-loc"></div>
+    </div>
+
+    <!-- BED / HALL -->
+    <div class="bed-card" id="bed-card">
+      <div class="bed-icon" id="bed-icon">🛏️</div>
+      <div class="bed-info">
+        <div class="bed-label">Accommodation</div>
+        <div class="bed-hall" id="bed-hall">Not yet assigned</div>
+        <div class="bed-num" id="bed-num"></div>
+      </div>
+    </div>
+
+    <!-- ADD TO HOME NUDGE -->
+    <div class="nudge" id="nudge" style="display:none">
+      <div class="nudge-icon">📲</div>
+      <div class="nudge-text">
+        <strong>Add to Home Screen</strong>
+        Tap <span id="nudge-share-icon">the Share button</span> then <em>"Add to Home Screen"</em> so you can find this page quickly.
+      </div>
+      <button class="nudge-close" onclick="dismissNudge()" aria-label="Dismiss">✕</button>
+    </div>
+
+    <!-- TILES -->
+    <div class="tile-grid" id="tile-grid"></div>
+
+    <!-- RELEASE BED -->
+    <div id="release-bed-section" style="display:none;margin-top:4px">
+      <div style="background:#fff;border-radius:var(--radius);padding:18px 20px;box-shadow:0 1px 4px rgba(0,0,0,.08);border:1.5px dashed var(--border)">
+        <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px">Leaving early?</div>
+        <p style="font-size:.88rem;color:var(--muted);margin-bottom:14px;line-height:1.5">If you or your group no longer need your bed(s), please let us know so we can offer them to other guests.</p>
+        <button type="button" id="release-bed-btn" onclick="releaseMyBed()" style="width:100%;background:#fff;border:2px solid var(--danger);color:var(--danger);border-radius:8px;padding:11px 16px;font-size:.92rem;font-weight:700;cursor:pointer;transition:all .15s">🛏️ Release My Bed</button>
+        <div id="release-bed-done" style="display:none;margin-top:10px;padding:10px 14px;background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;font-size:.88rem;color:var(--success);line-height:1.5">
+          ✅ Bed released — thank you. Staff have been notified and your bed will be made available to other guests.
+        </div>
+      </div>
+    </div>
+</div>
+
+<div class="main" id="error-content" style="display:none">
+  <div class="error-box">
+    <div class="err-icon">🔗</div>
+    <h2>Link not recognised</h2>
+    <p>This link may be incomplete or out of date. Please ask staff for a new WhatsApp message with your registration link.</p>
+  </div>
+</div>
+
+<!-- REPORT OVERLAY (full-screen, shown when Report tile is tapped) -->
+<div class="report-overlay" id="report-overlay">
+  <div class="report-overlay-hdr">
+    <button class="back-btn" onclick="closeReportOverlay()">← Back</button>
+    <span class="report-overlay-title">📋 Report an Issue</span>
+  </div>
+  <div class="main" id="report-main">
+
+    <!-- NO FIREBASE NOTICE -->
+    <div class="no-fb-notice hidden" id="no-fb-notice">
+      <strong>Online reporting not yet configured.</strong>
+      Please speak to a staff member to report an issue.
+    </div>
+
+    <!-- REPORT FORM -->
+    <div id="report-form-wrap">
+
+      <!-- Category -->
+      <div class="rpt-card">
+        <div class="rpt-card-title">What is this about?</div>
+        <!-- All categories (hidden once one is chosen) -->
+        <div class="cat-grid" id="rpt-cat-grid"></div>
+        <!-- Chosen category + change link (shown after selection) -->
+        <div class="cat-chosen" id="rpt-cat-chosen">
+          <span class="cat-chosen-label" id="rpt-cat-chosen-label"></span>
+          <button type="button" class="cat-change-btn" onclick="clearCategory()">Change</button>
+        </div>
+        <!-- Sub-categories -->
+        <div class="subcat-wrap" id="rpt-subcat-wrap">
+          <div class="subcat-label">Select specific issue</div>
+          <div class="subcat-grid" id="rpt-subcat-grid"></div>
+        </div>
+      </div>
+
+      <!-- Location -->
+      <div class="rpt-card">
+        <div class="rpt-card-title">Location</div>
+        <select class="rpt-select" id="rpt-location">
+          <option value="">Select location…</option>
+        </select>
+      </div>
+
+      <!-- Description -->
+      <div class="rpt-card">
+        <div class="rpt-card-title">Description</div>
+        <textarea class="rpt-textarea" id="rpt-description" placeholder="Please give as much detail as you can…"></textarea>
+      </div>
+
+      <!-- Privacy -->
+      <div class="rpt-card" id="rpt-privacy-card">
+        <div class="rpt-card-title">Privacy</div>
+        <label class="anon-label">
+          <input type="checkbox" id="rpt-anonymous">
+          <span>Submit anonymously — your name and ID will not be included in this report</span>
+        </label>
+        <div id="rpt-anon-note" class="hidden" style="margin-top:8px;padding:8px 12px;background:#fff7ed;border-radius:6px;font-size:.82rem;color:#92400e">
+          Anonymous mode recommended for this category.
+        </div>
+      </div>
+
+      <button type="button" class="rpt-submit-btn" id="rpt-submit-btn" onclick="submitReport()">Submit Report</button>
+
+    </div><!-- /report-form-wrap -->
+
+    <!-- SUCCESS STATE -->
+    <div class="success-card hidden" id="rpt-success">
+      <div class="s-icon">✅</div>
+      <h3>Report Submitted</h3>
+      <p id="rpt-success-msg">Your report has been sent to the event team.</p>
+      <div class="ref" id="rpt-success-ref"></div>
+      <button class="another-btn" onclick="resetReportForm()">Submit Another Report</button>
+    </div>
+
+  </div>
+</div><!-- /report-overlay -->
+
+
+<!-- TILE DETAIL SHEET -->
+<div class="tile-overlay" id="tile-overlay" onclick="closeTileSheet(event)">
+  <div class="tile-sheet" id="tile-sheet">
+    <div class="tile-sheet-hdr">
+      <span class="tile-sheet-emoji" id="tsh-emoji"></span>
+      <span class="tile-sheet-title" id="tsh-title"></span>
+      <button class="tile-sheet-close" onclick="closeTileSheet()">✕</button>
+    </div>
+    <div class="tile-sheet-body" id="tsh-body"></div>
+  </div>
+</div>
+
+<div id="app-toast" style="display:none;position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;padding:10px 20px;border-radius:99px;font-size:.85rem;font-weight:600;z-index:999;white-space:nowrap;max-width:90vw;text-overflow:ellipsis;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,.3)"></div>
+
+<script>
+function showToast(msg, dur=3000) {
+  const el = document.getElementById('app-toast');
+  if(!el) return;
+  el.textContent = msg;
+  el.style.display = 'block';
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.style.display = 'none'; }, dur);
+}
+
+// ── Dynamic PWA manifest ──────────────────────────────────────
+(function(){
+  const manifest={name:'My Event',short_name:'My Event',display:'standalone',start_url:location.href,background_color:'#f0f4f8',theme_color:'#1a3a5c',icons:[{src:'https://placehold.co/192x192/1a3a5c/ffffff?text=EV',sizes:'192x192',type:'image/png'},{src:'https://placehold.co/512x512/1a3a5c/ffffff?text=EV',sizes:'512x512',type:'image/png'}]};
+  const blob=new Blob([JSON.stringify(manifest)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement('link');
+  link.rel='manifest'; link.href=url;
+  document.head.appendChild(link);
+})();
+
+// ── Sub-categories (built-in defaults, overridden by payload.cats) ────────────
+const SUBCATS_DEFAULT = {
+  'Accommodation':['Bed allocation issue','Missing bedding','Bedding quality','Noise disturbance','Temperature too hot/cold','Lighting issue','Lost key / access card','Overcrowding','Safety concern'],
+  'Toilets & Showers':['Blocked toilet','No toilet paper','No soap','No water','Showers not working','Poor cleanliness','Long queues','Flooding / drainage'],
+  'Food & Refreshments':['Food quality','Food temperature','Dietary requirement issue','Allergen concern','Running out of food','Running out of drinks','Long queues','Hygiene concern'],
+  'Transport':['Airport transfer problem','Venue shuttle problem','Missed transport','Incorrect pickup location','Delays','Lost property on transport','Accessibility issue'],
+  'WiFi & Technology':['WiFi not working','Slow WiFi','Login issue','Charging station problem','App issue','AV / presentation issue'],
+  'Medical & First Aid':['Minor injury','Feeling unwell','Need medical assistance','Medication issue','Accessibility support needed'],
+  'Mental Wellbeing':['Feeling distressed','Need welfare support','Exhaustion / fatigue','Unable to sleep'],
+  'Safeguarding':['Harassment','Bullying','Aggressive behaviour','Discrimination','Inappropriate conduct','Security concern'],
+  'Security':['Lost property','Found property','Suspicious behaviour','Unauthorised person','Theft','Security incident'],
+  'Site Safety':['Trip hazard','Electrical hazard','Water leak','Fire concern','Damaged equipment','Unsafe area'],
+  'Laundry':['Need fresh bedding','Need replacement towel','Laundry issue'],
+  'Waste Management':['Overflowing bins','Recycling issue','Litter'],
+  'Accessibility':['Wheelchair access','Hearing support','Visual assistance','Mobility assistance'],
+  'Weather / Environment':['Flooding','Excessive heat','Cold exposure','Shelter problem'],
+  'Crowd Management':['Overcrowding','Queue issue','Entry/exit congestion'],
+  'Power & Utilities':['No power','Generator issue','Charging problem','Water outage']
+};
+
+// Active categories — set during boot from payload.cats or defaults
+let SUBCATS = SUBCATS_DEFAULT;
+
+const SENSITIVE_CATS = ['Safeguarding','Mental Wellbeing','Medical & First Aid','Security'];
+const DEFAULT_LOCS = ['Hall / Accommodation Block','Shower & Toilet Block','Dining Area','Shuttle Stop / Transport Hub','Main Entrance / Reception','First Aid Post','Prayer Hall','Car Park','General Site / Other'];
+
+// ── State ─────────────────────────────────────────────────────
+let fbDB = null;
+let payload = null;
+let selectedCategory = '';
+let selectedSubCategory = '';
+
+// ── Demo / test payload (used when no ?d= param is present) ──
+const DEMO_PAYLOAD = {
+  ev: 'Jalsa Salana 2026',
+  n: 'Test Guest',
+  id: 'DEMO-001',
+  h: 'Hall 1',
+  b: '23',
+  fb: null,
+  loc: DEFAULT_LOCS,
+  t: [
+    {id:1,emoji:'🕌',title:'Prayer Times',type:'list',color:'#1a3a5c',full:false,content:'Fajr: 3:45am\nZuhr: 1:15pm\nAsr: 5:30pm\nMaghrib: 9:10pm\nIsha: 10:45pm'},
+    {id:2,emoji:'🍽️',title:'Food & Refreshments',type:'list',color:'#16a34a',full:false,content:'Breakfast: 7:00–9:00am\nLunch: 1:00–2:30pm\nDinner: 7:00–9:00pm'},
+    {id:3,emoji:'📞',title:'Key Contacts',type:'contact',color:'#2557a7',full:false,content:'Main Helpdesk: 07700 900000\nLost & Found: 07700 900002'},
+    {id:4,emoji:'🚌',title:'Transport',type:'text',color:'#9333ea',full:false,content:'Shuttle times and pick-up points to be confirmed.'},
+    {id:5,emoji:'📶',title:'Free Wi-Fi',type:'list',color:'#0ea5e9',full:false,content:'Network: JalsaGuest\nPassword: Welcome2026'},
+    {id:6,emoji:'🩺',title:'First Aid',type:'contact',color:'#dc2626',full:false,content:'First Aid Post: [number]\nFirst Aid Location: [e.g., Near Main Gate]\nEmergency: 999\nHomeopathic Dispensary: [number]\nDispensary Morning: 8:00am – 12:00pm\nDispensary Afternoon: 2:00pm – 6:00pm\nDispensary Location: [location]'},
+    {id:7,emoji:'⚠️',title:'Report a Problem',type:'link',color:'#d97706',full:true,content:'Tap below to report any issue — accommodation, heating, lighting, bedding, transport, toilet cleanliness or anything else. Staff will respond promptly.\n[link]'}
+  ]
+};
+
+// ── Parse URL param ───────────────────────────────────────────
+function getPayload(){
+  try{
+    const raw=new URLSearchParams(location.search).get('d');
+    if(!raw) return null;
+    return JSON.parse(decodeURIComponent(escape(atob(raw))));
+  }catch(e){
+    console.warn('Payload parse error',e);
+    return null;
+  }
+}
+
+// ── Report overlay ────────────────────────────────────────────
+function openReportOverlay() {
+  clearCategory();
+  document.getElementById('report-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  window.scrollTo(0,0);
+}
+
+function closeReportOverlay() {
+  document.getElementById('report-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// ── Category button selection ─────────────────────────────────
+function selectCategory(cat) {
+  selectedCategory = cat;
+  selectedSubCategory = '';
+
+  // Collapse category grid, show chosen label
+  document.getElementById('rpt-cat-grid').style.display = 'none';
+  const chosen = document.getElementById('rpt-cat-chosen');
+  chosen.classList.add('visible');
+  document.getElementById('rpt-cat-chosen-label').textContent = cat;
+
+  // Render sub-category buttons
+  const subcatGrid = document.getElementById('rpt-subcat-grid');
+  const subcatWrap = document.getElementById('rpt-subcat-wrap');
+  subcatGrid.innerHTML = '';
+  if(cat && SUBCATS[cat] && SUBCATS[cat].length) {
+    [...SUBCATS[cat], 'Other'].forEach(s => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'subcat-btn';
+      btn.dataset.sub = s;
+      btn.textContent = s;
+      btn.onclick = () => selectSubCategory(s);
+      subcatGrid.appendChild(btn);
+    });
+    subcatWrap.classList.add('visible');
+  } else {
+    subcatWrap.classList.remove('visible');
+  }
+
+  // Sensitive category auto-anon
+  const privCard = document.getElementById('rpt-privacy-card');
+  const anonCb = document.getElementById('rpt-anonymous');
+  const anonNote = document.getElementById('rpt-anon-note');
+  if(SENSITIVE_CATS.includes(cat)) {
+    anonCb.checked = true;
+    privCard.classList.add('privacy-highlight');
+    anonNote.classList.remove('hidden');
+  } else {
+    privCard.classList.remove('privacy-highlight');
+    anonNote.classList.add('hidden');
+  }
+}
+
+function clearCategory() {
+  selectedCategory = '';
+  selectedSubCategory = '';
+  document.getElementById('rpt-cat-grid').style.display = '';
+  document.getElementById('rpt-cat-chosen').classList.remove('visible');
+  document.getElementById('rpt-subcat-grid').innerHTML = '';
+  document.getElementById('rpt-subcat-wrap').classList.remove('visible');
+}
+
+function selectSubCategory(sub) {
+  selectedSubCategory = sub;
+  document.querySelectorAll('#rpt-subcat-grid .subcat-btn').forEach(el => {
+    el.classList.toggle('selected', el.dataset.sub === sub);
+  });
+}
+
+// ── Submit report ─────────────────────────────────────────────
+function submitReport() {
+  const cat = selectedCategory;
+  const subcat = selectedSubCategory;
+  const loc = document.getElementById('rpt-location').value;
+  const desc = document.getElementById('rpt-description').value.trim();
+  const anon = document.getElementById('rpt-anonymous').checked;
+
+  if(!cat) { alert('Please select a category.'); return; }
+  if(!subcat) { alert('Please select a sub-category.'); return; }
+  if(!loc) { alert('Please select a location.'); return; }
+  if(!desc) { alert('Please provide a description.'); return; }
+
+  if(!fbDB) {
+    alert('Online reporting is not available. Please speak to a staff member.');
+    return;
+  }
+
+  const btn = document.getElementById('rpt-submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Submitting…';
+
+  const report = {
+    guestId: anon ? null : (payload.id || null),
+    guestName: anon ? null : (payload.n || null),
+    guestHall: anon ? null : (payload.h || null),
+    guestBed: anon ? null : (payload.b || null),
+    category: cat,
+    subCategory: subcat,
+    location: loc,
+    description: desc,
+    anonymous: anon,
+    status: 'new',
+    submittedAt: Date.now(),
+    eventName: payload.ev || ''
+  };
+
+  fbDB.ref('reports').push(report)
+    .then(ref => {
+      document.getElementById('report-form-wrap').classList.add('hidden');
+      const successEl = document.getElementById('rpt-success');
+      successEl.classList.remove('hidden');
+      document.getElementById('rpt-success-msg').textContent = 'Your report has been sent to the event team.';
+      document.getElementById('rpt-success-ref').textContent = 'Reference: ' + ref.key;
+    })
+    .catch(err => {
+      btn.disabled = false;
+      btn.textContent = 'Submit Report';
+      alert('Could not submit report: ' + err.message);
+    });
+}
+
+function resetReportForm() {
+  clearCategory();
+  document.getElementById('rpt-location').value = '';
+  document.getElementById('rpt-description').value = '';
+  document.getElementById('rpt-anonymous').checked = false;
+  document.getElementById('rpt-privacy-card').classList.remove('privacy-highlight');
+  document.getElementById('rpt-anon-note').classList.add('hidden');
+  document.getElementById('report-form-wrap').classList.remove('hidden');
+  document.getElementById('rpt-submit-btn').disabled = false;
+  document.getElementById('rpt-submit-btn').textContent = 'Submit Report';
+  document.getElementById('rpt-success').classList.add('hidden');
+}
+
+
+// ── Nudge ─────────────────────────────────────────────────────
+function showNudge(){
+  const nudge=document.getElementById('nudge');
+  if(sessionStorage.getItem('nudge_dismissed')) return;
+  if(window.navigator.standalone||window.matchMedia('(display-mode: standalone)').matches) return;
+  nudge.style.display='flex';
+  const isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
+  document.getElementById('nudge-share-icon').textContent=isIOS?'the Share button (□↑)':'the browser menu (⋮)';
+}
+
+function dismissNudge(){
+  sessionStorage.setItem('nudge_dismissed','1');
+  document.getElementById('nudge').style.display='none';
+}
+
+// ── Render tiles ──────────────────────────────────────────────
+let tileData = []; // store for sheet lookup
+
+function renderTile(t, idx){
+  return `<button type="button" class="tile${t.full?' full':''}" style="--tile-color:${t.color||'#1a3a5c'}" onclick="openTileSheet(${idx})">
+    <span class="tile-emoji">${t.emoji||'📌'}</span>
+    <span class="tile-title">${esc(t.title||'')}</span>
+  </button>`;
+}
+
+function openTileSheet(idx){
+  const t = tileData[idx];
+  if(!t) return;
+
+  // If it's a "report" tile, open the report overlay
+  if(t.type === 'report' || (t.title||'').toLowerCase().includes('report')){
+    openReportOverlay();
+    return;
+  }
+
+  document.getElementById('tsh-emoji').textContent = t.emoji||'📌';
+  document.getElementById('tsh-title').textContent = t.title||'';
+  document.getElementById('tsh-body').innerHTML = buildTileBody(t);
+  document.getElementById('tile-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeTileSheet(e){
+  if(e && e.target !== document.getElementById('tile-overlay')) return;
+  document.getElementById('tile-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function buildTileBody(t){
+  const content=(t.content||'').trim();
+  if(!content) return '<span style="color:#94a3b8;font-size:.82rem">No content</span>';
+  switch(t.type){
+    case 'list':{
+      const items=content.split('\n').filter(l=>l.trim());
+      return `<ul>${items.map(i=>`<li>${esc(i.trim())}</li>`).join('')}</ul>`;
+    }
+    case 'contact':{
+      const rows=content.split('\n').filter(l=>l.trim());
+      return rows.map(row=>{
+        const idx=row.indexOf(':');
+        if(idx<0) return `<div class="tile-contact-row"><span class="tile-contact-val">${esc(row.trim())}</span></div>`;
+        const label=row.slice(0,idx).trim();
+        const val=row.slice(idx+1).trim();
+        const phoneRe=/^[\d\s\+\-\(\)]{7,}$/;
+        const valHtml=phoneRe.test(val)
+          ?`<a href="tel:${val.replace(/\s/g,'')}">${esc(val)}</a>`
+          :esc(val);
+        return `<div class="tile-contact-row"><span class="tile-contact-label">${esc(label)}</span><span class="tile-contact-val">${valHtml}</span></div>`;
+      }).join('');
+    }
+    case 'link':{
+      const lines=content.split('\n').filter(l=>l.trim());
+      const desc=lines[0]||'';
+      const url=lines[1]||'';
+      if(url) return `<p>${esc(desc)}</p><p><a href="${escAttr(url)}" target="_blank" rel="noopener">${esc(url)}</a></p>`;
+      return `<p>${esc(desc)}</p>`;
+    }
+    case 'text':
+    default:{
+      return content.split('\n\n').map(para=>`<p>${esc(para.trim())}</p>`).join('');
+    }
+  }
+}
+
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
+function escAttr(s){ return String(s).replace(/"/g,'&quot;') }
+
+// ── Release bed ───────────────────────────────────────────────
+function releaseMyBed() {
+  if (!confirm('Release your bed? This will free it up for other guests. If you need accommodation again, please speak to hall staff.')) return;
+  const btn = document.getElementById('release-bed-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Releasing…';
+
+  if (fbDB && payload.id) {
+    fbDB.ref('registrations/' + payload.id).update({
+      hallId: null,
+      bedNumber: null,
+      hallName: null,
+      bedReleasedAt: Date.now()
+    }).then(() => {
+      showBedReleased();
+    }).catch(() => {
+      btn.disabled = false;
+      btn.textContent = '🛏️ Release My Bed';
+      showToast('Could not release bed online — please speak to hall staff');
+    });
+  } else {
+    // No Firebase — instruct to speak to staff
+    btn.disabled = false;
+    btn.textContent = '🛏️ Release My Bed';
+    showToast('Please speak to hall staff to release your bed');
+  }
+}
+
+function showBedReleased() {
+  document.getElementById('bed-hall').textContent = 'Released';
+  document.getElementById('bed-num').textContent = 'Speak to hall staff if you need a new bed';
+  document.getElementById('bed-card').classList.add('unassigned');
+  document.getElementById('bed-icon').textContent = '✅';
+  document.getElementById('release-bed-btn').style.display = 'none';
+  document.getElementById('release-bed-done').style.display = 'block';
+}
+
+// ── Boot ──────────────────────────────────────────────────────
+(function init(){
+  payload = getPayload();
+
+  if(!payload || !payload.id){
+    // Fall back to demo mode — pull edited data from staff system's localStorage if available
+    payload = Object.assign({}, DEMO_PAYLOAD);
+    try {
+      const savedTiles = JSON.parse(localStorage.getItem('evtreg_tiles')||'null');
+      if(Array.isArray(savedTiles) && savedTiles.length) payload.t = savedTiles;
+      const savedLocs = JSON.parse(localStorage.getItem('evtreg_rptlocs')||'null');
+      if(Array.isArray(savedLocs) && savedLocs.length) payload.loc = savedLocs;
+      const savedCats = JSON.parse(localStorage.getItem('evtreg_rptcats')||'null');
+      if(savedCats && typeof savedCats === 'object' && Object.keys(savedCats).length) payload.cats = savedCats;
+      const savedName = localStorage.getItem('evtreg_name');
+      if(savedName) payload.ev = savedName;
+    } catch(e){}
+    const banner = document.createElement('div');
+    banner.style.cssText='background:#fef9c3;border-bottom:2px solid #fde047;padding:8px 16px;font-size:.82rem;color:#713f12;text-align:center;font-weight:600';
+    banner.textContent='⚠️ Demo mode — showing your saved configuration with sample guest data.';
+    document.body.insertBefore(banner, document.body.firstChild);
+  }
+
+  // Header
+  document.getElementById('hdr-event').textContent=payload.ev||'Event';
+  document.title=(payload.ev||'Event')+' — Guest Info';
+
+  // ID card
+  document.getElementById('g-id').textContent=payload.id||'—';
+  document.getElementById('g-name').textContent=payload.n||'';
+
+  // Bed / hall
+  if(payload.h){
+    document.getElementById('bed-hall').textContent=payload.h;
+    document.getElementById('bed-num').textContent=payload.b?`Bed ${payload.b}`:'';
+    document.getElementById('bed-card').classList.remove('unassigned');
+    document.getElementById('bed-icon').textContent='🛏️';
+  }else{
+    document.getElementById('bed-hall').textContent='Not yet assigned';
+    document.getElementById('bed-num').textContent='Check in with hall staff on arrival';
+    document.getElementById('bed-card').classList.add('unassigned');
+    document.getElementById('bed-icon').textContent='⏳';
+  }
+
+  // Tiles
+  const tiles=Array.isArray(payload.t)?payload.t:[];
+  tileData = tiles;
+  const grid=document.getElementById('tile-grid');
+  if(tiles.length){
+    grid.innerHTML=tiles.map((t,i)=>renderTile(t,i)).join('');
+  }else{
+    grid.style.display='none';
+  }
+
+  // Show main
+  document.getElementById('main-content').style.display='flex';
+
+  // Nudge after short delay
+  setTimeout(showNudge, 1500);
+
+  // Firebase init
+  if(payload.fb && payload.fb.apiKey) {
+    try {
+      if(typeof firebase !== 'undefined') {
+        if(!firebase.apps.length) {
+          firebase.initializeApp(payload.fb);
+        }
+        fbDB = firebase.database();
+
+        // Listen for bed/hall assignment updates in real time
+        if(payload.id && fbDB) {
+          fbDB.ref('registrations/' + payload.id).on('value', snapshot => {
+            const data = snapshot.val();
+            if(!data) return;
+            if(data.hallName || data.hallId) {
+              const hallDisplay = data.hallName || ('Hall ' + data.hallId);
+              document.getElementById('bed-hall').textContent = hallDisplay;
+              document.getElementById('bed-card').classList.remove('unassigned');
+              document.getElementById('bed-icon').textContent = '🛏️';
+            }
+            if(data.bedNumber) {
+              document.getElementById('bed-num').textContent = 'Bed ' + data.bedNumber;
+            }
+            // If bed was just assigned while app is open, show a toast and show release button
+            if(data.bedNumber && data.hallName && !payload.b) {
+              payload.b = data.bedNumber;
+              payload.h = data.hallName;
+              document.getElementById('release-bed-section').style.display = 'block';
+              showToast('🛏️ Bed assigned: ' + data.hallName + ' — Bed ' + data.bedNumber);
+            }
+            // If bed was released (hallId null), reflect that
+            if(data.bedReleasedAt && !data.hallId) {
+              showBedReleased();
+            }
+          });
+        }
+      }
+    } catch(e) {
+      console.warn('Firebase init error:', e);
+      fbDB = null;
+    }
+  }
+
+  // Setup report locations
+  const locs = (payload.loc && Array.isArray(payload.loc) && payload.loc.length) ? payload.loc : DEFAULT_LOCS;
+  const locSel = document.getElementById('rpt-location');
+  locs.forEach(l => {
+    const o = document.createElement('option');
+    o.value = o.textContent = l;
+    locSel.appendChild(o);
+  });
+
+  // Setup categories — override from payload if available, then render buttons
+  if(payload.cats && typeof payload.cats === 'object' && Object.keys(payload.cats).length > 0){
+    SUBCATS = payload.cats;
+  }
+  const catGrid = document.getElementById('rpt-cat-grid');
+  Object.keys(SUBCATS).forEach(cat => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'cat-btn';
+    btn.dataset.cat = cat;
+    btn.textContent = cat;
+    btn.onclick = () => selectCategory(cat);
+    catGrid.appendChild(btn);
+  });
+
+  // Show or hide no-firebase notice in report tab
+  if(!fbDB) {
+    document.getElementById('no-fb-notice').classList.remove('hidden');
+    document.getElementById('report-form-wrap').classList.add('hidden');
+  }
+
+  // Show release-bed section when bed is assigned
+  if(payload.h && payload.b) {
+    document.getElementById('release-bed-section').style.display = 'block';
+  }
+
+})();
+</script>
+</body>
+</html>
