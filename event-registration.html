@@ -856,7 +856,7 @@ const MSAL_CONFIG = {
   auth: {
     clientId: '4e365e9d-2d6c-4d0d-82e2-feed25f9e82c',
     authority: 'https://login.microsoftonline.com/bfaab692-d34f-48a4-ba02-013e03d14c7c',
-    redirectUri: 'https://masroor-ahmad.github.io/BF_Jalsa_Portal/event-registration.html'
+    redirectUri: 'https://-ahmad.github.io/BF_Jalsa_Portal/event-registration.html'
   },
   cache: { cacheLocation: 'sessionStorage', storeAuthStateInCookie: false }
 };
@@ -873,9 +873,11 @@ let spListIds = {}; // { Guests, Halls, EventSettings, Reports, FemaleContacts }
 // Add Microsoft 365 email addresses of staff approved to view female contact details.
 // All other staff will see 🔒 Restricted for female mobile/email fields.
 const APPROVED_FEMALE_DATA_EMAILS = [
-  // 'example@amauk.org',  ← replace with approved staff emails, one per line
-];
-let canSeeFemaleData = false;
+ 'masroor@ahmadiyyauk.org',
+  'regamir.baitulfutuh@ahmadiyyauk.org',
+  'naseer.dean@ahmadiyyauk.org',
+  ];
+  let canSeeFemaleData = false;
 
 function checkFemaleDataAccess() {
   if (!currentAccount) return;
